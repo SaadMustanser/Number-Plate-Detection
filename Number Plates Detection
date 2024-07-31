@@ -1,0 +1,68 @@
+!pip install paddlepaddle-gpu
+!pip install paddleocr
+from ultralytics import YOLO
+from paddleocr import PaddleOCR
+import cv2
+import matplotlib.pyplot as plt
+import os
+
+# Load the YOLOv8 model
+model_path = '/content/drive/MyDrive/vehicle/runs/detect/vehicles2/weights/best.pt'  # Update with the path to your trained model
+model = YOLO(model_path)
+
+# Initialize PaddleOCR reader
+ocr = PaddleOCR(use_angle_cls=True, lang='en')
+
+# Path to the folder with test images
+images_folder = '/content/drive/MyDrive/vehicle/test'  # Update with the path to your test images
+
+# List all image files in the directory
+image_files = [f for f in os.listdir(images_folder) if f.endswith(('jpg', 'jpeg', 'png'))]
+
+# Process each image file
+for image_file in image_files:
+    # Full path to the image
+    image_path = os.path.join(images_folder, image_file)
+
+    # Load the image
+    image = cv2.imread(image_path)
+
+    # Check if the image was loaded successfully
+    if image is None:
+        print(f"Error: Failed to load image at {image_path}")
+        continue
+
+    # Run the model on the image
+    results = model(image)
+
+    # Get the detected objects
+    detections = results[0].boxes
+
+    # Draw rectangles around detected objects and apply PaddleOCR
+    for detection in detections:
+        x1, y1, x2, y2 = map(int, detection.xyxy[0])  # Bounding box coordinates
+
+        # Extract the region of interest (ROI) for OCR
+        roi = image[y1:y2, x1:x2]
+
+        # Apply PaddleOCR on the ROI
+        ocr_results = ocr.ocr(roi, cls=True)
+        
+        # Check if OCR results are not empty
+        if ocr_results and ocr_results[0]:
+            # Draw the rectangle on the image
+            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            
+            # Extract and concatenate the detected text
+            text = " ".join([result[1][0] for result in ocr_results[0]])
+            cv2.putText(image, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    # Convert the image from BGR (OpenCV format) to RGB (matplotlib format)
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # Display the image with rectangles and text
+    plt.figure(figsize=(10, 10))
+    plt.imshow(image_rgb)
+    plt.axis('off')
+    plt.title(image_file)
+    plt.show()
